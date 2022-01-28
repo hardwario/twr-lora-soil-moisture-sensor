@@ -19,18 +19,16 @@ function Decode(port, bytes) {
 
     var header = u8();
     var voltage = u8() / 10;
-    var count = (bytes.length - 2) / 2;
-
-    var temperatures = [];
-
-    for (var i = 0; i < count; i++) {
-        temperatures.push(s16() / 10);
-    }
+    var temperature_soil = s16() / 10;
+    var soil_raw = s16();
+    var temperature_core = s16() / 10;
 
     return {
         header: header,
         voltage: voltage,
-        temperatures: temperatures
+        temperatureSoil: temperature_soil,
+        soilRaw: soil_raw,
+        temperatureCore: temperature_core
     };
 }
 

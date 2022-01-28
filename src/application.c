@@ -1,13 +1,10 @@
 #include <twr.h>
 
-#define SERVICE_MODE_INTERVAL               (15 * 60 * 1000)
 
 #define MEASURE_INTERVAL (5 * 60 * 1000)
 
 #define SEND_DATA_INTERVAL (15 * 60 * 1000)
 
-#define SENSOR_UPDATE_SERVICE_INTERVAL      (15 * 1000)
-#define SENSOR_UPDATE_NORMAL_INTERVAL       (5 * 60 * 1000)
 
 typedef struct
 {
@@ -17,11 +14,13 @@ typedef struct
 
 } event_param_t;
 
-TWR_DATA_STREAM_INT_BUFFER(sm_soil_buffer, (SEND_DATA_INTERVAL / MEASURE_INTERVAL))
-TWR_DATA_STREAM_FLOAT_BUFFER(sm_temperature_buffer, (SEND_DATA_INTERVAL / MEASURE_INTERVAL))
+TWR_DATA_STREAM_INT_BUFFER(sm_soil_moisture_buffer, (SEND_DATA_INTERVAL / MEASURE_INTERVAL))
+TWR_DATA_STREAM_FLOAT_BUFFER(sm_soil_temperature_buffer, (SEND_DATA_INTERVAL / MEASURE_INTERVAL))
+TWR_DATA_STREAM_FLOAT_BUFFER(sm_core_temperature_buffer, (SEND_DATA_INTERVAL / MEASURE_INTERVAL))
 
-twr_data_stream_t sm_soil;
-twr_data_stream_t sm_temperature;
+twr_data_stream_t sm_soil_moisture;
+twr_data_stream_t sm_soil_temperature;
+twr_data_stream_t sm_core_temperature;
 
 TWR_DATA_STREAM_FLOAT_BUFFER(sm_voltage_buffer, 8)
 
@@ -33,6 +32,7 @@ twr_led_t led;
 twr_button_t button;
 
 twr_soil_sensor_t soil_sensor;
+twr_tmp112_t tmp112;
 
 // Lora instance
 twr_cmwx1zzabz_t lora;
@@ -136,27 +136,40 @@ bool at_status(void)
         twr_atci_printfln("$STATUS: \"Voltage\",");
     }
 
-    float temperature_avg = NAN;
+    float soil_temperature_avg = NAN;
 
-    if (twr_data_stream_get_average(&sm_temperature, &temperature_avg))
+    if (twr_data_stream_get_average(&sm_soil_temperature, &soil_temperature_avg))
     {
-        twr_atci_printfln("$STATUS: \"Temperature\",%.1f", temperature_avg);
+        twr_atci_printfln("$STATUS: \"Soil temperature\",%.1f", soil_temperature_avg);
     }
     else
     {
-        twr_atci_printfln("$STATUS: \"Temperature\",");
+        twr_atci_printfln("$STATUS: \"Soil temperature\",");
     }
 
-    float soil_avg = NAN;
+    float soil_moisture_avg = NAN;
 
-    if (twr_data_stream_get_average(&sm_soil, &soil_avg))
+    if (twr_data_stream_get_average(&sm_soil_moisture, &soil_moisture_avg))
     {
-        twr_atci_printfln("$STATUS: \"Soil Moisture\",%.1f", soil_avg);
+        twr_atci_printfln("$STATUS: \"Soil Moisture\",%.1f", soil_moisture_avg);
     }
     else
     {
         twr_atci_printfln("$STATUS: \"Soil Moisture\",");
     }
+
+    float temperature_avg = NAN;
+
+    if (twr_data_stream_get_average(&sm_core_temperature, &temperature_avg))
+    {
+        twr_atci_printfln("$STATUS: \"Core temperature\",%.1f", temperature_avg);
+    }
+    else
+    {
+        twr_atci_printfln("$STATUS: \"Core temperature\",");
+    }
+
+
 
     return true;
 }
@@ -165,18 +178,11 @@ void soil_sensor_event_handler(twr_soil_sensor_t *self, uint64_t device_address,
 {
     if (event == TWR_SOIL_SENSOR_EVENT_UPDATE)
     {
-        int index = twr_soil_sensor_get_index_by_device_address(self, device_address);
-
-        if (index < 0)
-        {
-            return;
-        }
-
         float temperature;
 
         if (twr_soil_sensor_get_temperature_celsius(self, device_address, &temperature))
         {
-            twr_data_stream_feed(&sm_temperature, &temperature);
+            twr_data_stream_feed(&sm_soil_temperature, &temperature);
         }
 
         uint16_t raw_cap_u16;
@@ -185,27 +191,32 @@ void soil_sensor_event_handler(twr_soil_sensor_t *self, uint64_t device_address,
         {
             // Publish raw capacitance value message on radio
             int raw_cap = (int)raw_cap_u16;
-            twr_data_stream_feed(&sm_soil, &raw_cap);
+            twr_log_debug("SOIL RAW: %d", raw_cap);
+            twr_data_stream_feed(&sm_soil_moisture, &raw_cap);
         }
     }
     else if (event == TWR_SOIL_SENSOR_EVENT_ERROR)
     {
-        int error = twr_soil_sensor_get_error(self);
         twr_atci_printfln("$STATUS: \"Sensor Error\",");
-
     }
 }
 
-void switch_to_normal_mode_task(void *param)
+void tmp112_event_handler(twr_tmp112_t *self, twr_tmp112_event_t event, void *event_param)
 {
-    twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_NORMAL_INTERVAL);
+    if (event == TWR_TMP112_EVENT_UPDATE)
+    {
+        float temperature;
 
-    twr_scheduler_unregister(twr_scheduler_get_current_task_id());
+        if (twr_tmp112_get_temperature_celsius(self, &temperature))
+        {
+            twr_data_stream_feed(&sm_core_temperature, &temperature);
+        }
+    }
 }
 
 void application_init(void)
 {
-    // twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
+    twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
 
     // Initialize LED
     twr_led_init(&led, TWR_GPIO_LED, false, false);
@@ -223,13 +234,17 @@ void application_init(void)
     // Initialize soil sensor
     twr_soil_sensor_init(&soil_sensor);
     twr_soil_sensor_set_event_handler(&soil_sensor, soil_sensor_event_handler, NULL);
-    twr_soil_sensor_set_update_interval(&soil_sensor, SENSOR_UPDATE_SERVICE_INTERVAL);
-    twr_scheduler_register(switch_to_normal_mode_task, NULL, SERVICE_MODE_INTERVAL);
+    twr_soil_sensor_set_update_interval(&soil_sensor, MEASURE_INTERVAL);
+
+    twr_tmp112_init(&tmp112, TWR_I2C_I2C0, 0x49);
+    twr_tmp112_set_event_handler(&tmp112, tmp112_event_handler, NULL);
+    twr_tmp112_set_update_interval(&tmp112, MEASURE_INTERVAL);
 
     // Init stream buffers for averaging
     twr_data_stream_init(&sm_voltage, 1, &sm_voltage_buffer);
-    twr_data_stream_init(&sm_soil, 1, &sm_soil_buffer);
-    twr_data_stream_init(&sm_temperature, 1, &sm_temperature_buffer);
+    twr_data_stream_init(&sm_soil_moisture, 1, &sm_soil_moisture_buffer);
+    twr_data_stream_init(&sm_soil_temperature, 1, &sm_soil_temperature_buffer);
+    twr_data_stream_init(&sm_core_temperature, 1, &sm_core_temperature_buffer);
 
     // Initialize lora module
     twr_cmwx1zzabz_init(&lora, TWR_UART_UART1);
@@ -267,7 +282,7 @@ void application_task(void)
         return;
     }
 
-    static uint8_t buffer[6];
+    static uint8_t buffer[8];
 
     memset(buffer, 0xff, sizeof(buffer));
 
@@ -284,7 +299,7 @@ void application_task(void)
 
     float temperature_avg = NAN;
 
-    twr_data_stream_get_average(&sm_temperature, &temperature_avg);
+    twr_data_stream_get_average(&sm_soil_temperature, &temperature_avg);
 
     if (!isnan(temperature_avg))
     {
@@ -294,19 +309,35 @@ void application_task(void)
         buffer[3] = temperature_i16;
     }
 
-    float soil_avg = NAN;
+    int soil_avg = -10;
 
-    twr_data_stream_get_average(&sm_soil, &soil_avg);
+    twr_data_stream_get_average(&sm_soil_moisture, &soil_avg);
 
-    if (!isnan(soil_avg))
+    twr_log_debug("SOIL: %d", soil_avg);
+    if (soil_avg != -10)
     {
-        int16_t soil_i16 = (int16_t) (soil_avg * 10.f);
+        int16_t soil_i16 = (int16_t) (soil_avg);
+
+        twr_log_debug("SOIL: %d", soil_i16);
 
         buffer[4] = soil_i16 >> 8;
         buffer[5] = soil_i16;
     }
 
+    float core_temperature_avg = NAN;
+
+    twr_data_stream_get_average(&sm_core_temperature, &core_temperature_avg);
+
+    if (!isnan(core_temperature_avg))
+    {
+        int16_t temperature_i16 = (int16_t) (core_temperature_avg * 10.f);
+
+        buffer[6] = temperature_i16 >> 8;
+        buffer[7] = temperature_i16;
+    }
+
     twr_cmwx1zzabz_send_message(&lora, buffer, sizeof(buffer));
+    twr_log_debug("MESSAGE SEND");
 
     twr_scheduler_plan_current_relative(SEND_DATA_INTERVAL);
 }

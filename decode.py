@@ -15,34 +15,32 @@ header_lut = {
 }
 
 def decode(data):
-    if len(data) < 12:
+    if len(data) < 16:
         raise Exception("Bad data length, min 12 characters expected")
 
     header = int(data[0:2], 16)
-    temperature = int(data[4:6], 16) if data[2:4] != 'ffff' else None
-    soil = int(data[6:8], 16) if data[2:4] != 'ffff' else None
+    soil_temperature = int(data[4:8], 16) if data[4:8] != 'ffff' else None
+    core_temperature = int(data[12:16], 16) if data[12:16] != 'ffff' else None
 
-    temperature /= 10.0
-    soil /= 10.0
-
+    soil_temperature /= 10.0
+    core_temperature /= 10.0
 
     resp = {
         "header": header_lut[header],
         "voltage": int(data[2:4], 16) / 10.0 if data[2:4] != 'ff' else None,
-        "temperature": temperature,
-        "soil": soil
-
+        "soil_temperature": soil_temperature,
+        "soil_moisture": int(data[8:12], 16) if data[8:12] != 'ffff' else None,
+        "core_temperature": core_temperature
     }
 
     return resp
 
-
 def pprint(data):
     print('Header :', data['header'])
     print('Voltage :', data['voltage'])
-    print('Temperature :', data['temperature'])
-    print('Soil Moisture :', data['soil'])
-
+    print('Soil temperature :', data['soil_temperature'])
+    print('Soil Moisture :', data['soil_moisture'])
+    print('Core temperature :', data['core_temperature'])
 
 
 if __name__ == '__main__':

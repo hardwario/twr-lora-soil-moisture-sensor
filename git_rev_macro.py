@@ -23,4 +23,6 @@ try:
 except subprocess.CalledProcessError:
     git_version = '?'
 
+git_version = git_version.replace('\'', '')
+
 print("-DVERSION='\"{}\"' -DBUILD_DATE='\"{}\"' -DGIT_VERSION='\"{}\"'".format(version, date, git_version))

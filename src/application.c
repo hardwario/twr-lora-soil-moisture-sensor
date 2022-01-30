@@ -20,7 +20,6 @@ twr_data_stream_t sm_soil_temperature;
 twr_data_stream_t sm_core_temperature;
 
 TWR_DATA_STREAM_FLOAT_BUFFER(sm_voltage_buffer, 8)
-
 twr_data_stream_t sm_voltage;
 
 // LED instance
@@ -176,9 +175,7 @@ void soil_sensor_event_handler(twr_soil_sensor_t *self, uint64_t device_address,
 
         if (twr_soil_sensor_get_cap_raw(self, device_address, &raw_cap_u16))
         {
-            // Publish raw capacitance value message on radio
             int raw_cap = (int)raw_cap_u16;
-            twr_log_debug("SOIL RAW: %d", raw_cap);
             twr_data_stream_feed(&sm_soil_moisture, &raw_cap);
         }
     }
@@ -203,7 +200,7 @@ void tmp112_event_handler(twr_tmp112_t *self, twr_tmp112_event_t event, void *ev
 
 void application_init(void)
 {
-    twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
+    //twr_log_init(TWR_LOG_LEVEL_DUMP, TWR_LOG_TIMESTAMP_ABS);
 
     // Initialize LED
     twr_led_init(&led, TWR_GPIO_LED, false, false);
@@ -254,9 +251,6 @@ void application_init(void)
     twr_scheduler_plan_relative(0, 10 * 1000);
     
     twr_led_pulse(&led, 2000);
-
-    twr_atci_println("@BUILD_DATE: " BUILD_DATE);
-    twr_atci_println("@GIT_VERSION: " GIT_VERSION);
 }
 
 void application_task(void)
@@ -299,12 +293,9 @@ void application_task(void)
 
     twr_data_stream_get_average(&sm_soil_moisture, &soil_avg);
 
-    twr_log_debug("SOIL: %d", soil_avg);
     if (soil_avg != -10)
     {
         int16_t soil_i16 = (int16_t) (soil_avg);
-
-        twr_log_debug("SOIL: %d", soil_i16);
 
         buffer[4] = soil_i16 >> 8;
         buffer[5] = soil_i16;
@@ -323,7 +314,6 @@ void application_task(void)
     }
 
     twr_cmwx1zzabz_send_message(&lora, buffer, sizeof(buffer));
-    twr_log_debug("MESSAGE SEND");
 
     twr_scheduler_plan_current_relative(SEND_DATA_INTERVAL);
 }

@@ -40,7 +40,6 @@ def pprint(data):
     print('Soil Moisture :', data['soil_moisture'])
     print('Core temperature :', data['core_temperature'])
 
-
 if __name__ == '__main__':
     if len(sys.argv) != 2 or sys.argv[1] in ('help', '-h', '--help'):
         print("usage: python3 decode.py [data]")

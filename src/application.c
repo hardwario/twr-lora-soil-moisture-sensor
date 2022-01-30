@@ -1,10 +1,7 @@
 #include <twr.h>
 
-
 #define MEASURE_INTERVAL (5 * 60 * 1000)
-
 #define SEND_DATA_INTERVAL (15 * 60 * 1000)
-
 
 typedef struct
 {
@@ -46,12 +43,11 @@ enum {
 
 } header = HEADER_BOOT;
 
-
 void button_event_handler(twr_button_t *self, twr_button_event_t event, void *event_param)
 {
     (void) event_param;
 
-    if (event == TWR_BUTTON_EVENT_CLICK)
+    if (event == TWR_BUTTON_EVENT_PRESS)
     {
         header = HEADER_BUTTON_PRESS;
 
@@ -262,7 +258,6 @@ void application_init(void)
     twr_atci_println("@BUILD_DATE: " BUILD_DATE);
     twr_atci_println("@GIT_VERSION: " GIT_VERSION);
 }
-
 
 void application_task(void)
 {

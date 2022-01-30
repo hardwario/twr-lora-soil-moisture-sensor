@@ -159,8 +159,6 @@ bool at_status(void)
         twr_atci_printfln("$STATUS: \"Core temperature\",");
     }
 
-
-
     return true;
 }
 
@@ -261,7 +259,6 @@ void application_init(void)
     twr_atci_println("@BUILD_DATE: " BUILD_DATE);
     twr_atci_println("@GIT_VERSION: " GIT_VERSION);
 }
-
 
 void application_task(void)
 {

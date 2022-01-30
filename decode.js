@@ -1,19 +1,15 @@
-function decodeUplink(input) {
-    return {
-      data: Decode(input.fPort, input.bytes, 0),
-      warnings: [],
-      errors: []
-    };
-  }
-
 var cursor = 0;
 var buffer;
 
-function Decode(port, bytes) {
+// Uncomment for ChirpStack:
+function Decode(port, bytes, variables) {
+
+// Uncomment for The Things Network:
+// function Decoder(port, bytes) {
 
     buffer = bytes;
 
-    if (bytes.length < 2) {
+    if (bytes.length !== 8) {
         return {};
     }
 
@@ -26,9 +22,9 @@ function Decode(port, bytes) {
     return {
         header: header,
         voltage: voltage,
-        temperatureSoil: temperature_soil,
-        soilRaw: soil_raw,
-        temperatureCore: temperature_core
+        temperature_soil: temperature_soil,
+        soil_raw: soil_raw,
+        temperature_core: temperature_core
     };
 }
 
